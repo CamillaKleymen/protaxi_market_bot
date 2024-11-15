@@ -11,6 +11,7 @@ import aiohttp
 import asyncio
 import requests
 import telebot
+from config import Config
 from telebot import types
 
 # Настройка логирования
@@ -20,23 +21,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Конфигурация
-API_TOKEN = '7534486887:AAFclAId55bLPlE6QoYWwGzX1nMX-j6pfJs'
-bot = telebot.TeleBot(API_TOKEN)
 
-# Email конфигурация
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 587
-EMAIL_HOST_USER = "camillakleymen@gmail.com"
-EMAIL_HOST_PASSWORD = "zqrz tgqi zgpt yvyp"
-EMAIL_RECIPIENT = "camillakleymen@gmail.com"
-
-# API URLs
-BASE_API_URL = "https://protaxi-market.uz/module/shop/api"
-CHECK_ID_URL = f"{BASE_API_URL}/check-id"
-LOGIN_URL = f"{BASE_API_URL}/login"
-CATEGORIES_API_URL = f"{BASE_API_URL}/get-all-categories"
-PRODUCTS_API_URL = f"{BASE_API_URL}/get-all-products"
+# global variable => bot token
+bot = telebot.TeleBot(Config.API_TOKEN)
 
 # Состояния пользователей
 user_states = {}
@@ -46,7 +33,7 @@ user_states = {}
 async def check_protaxi_id(protaxi_id):
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(f"{CHECK_ID_URL}?id={protaxi_id}") as response:
+            async with session.get(f"{Config.CHECK_ID_URL}?id={protaxi_id}") as response:
                 if response.status == 200:
                     data = await response.json()
                     return data.get('success') is True
@@ -59,7 +46,7 @@ async def check_protaxi_id(protaxi_id):
 async def verify_login(protaxi_id, password):
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(f"{LOGIN_URL}?id={protaxi_id}&password={password}") as response:
+            async with session.get(f"{Config.LOGIN_URL}?id={protaxi_id}&password={password}") as response:
                 if response.status == 200:
                     data = await response.json()
                     return data.get('success') is True
@@ -163,13 +150,13 @@ async def fetch_product_data(url):
 
 
 async def fetch_all_products():
-    data = await fetch_product_data(PRODUCTS_API_URL)
+    data = await fetch_product_data(Config.PRODUCTS_API_URL)
     return data
 
 
 def fetch_all_categories():
     try:
-        response = requests.get(CATEGORIES_API_URL)
+        response = requests.get(Config.CATEGORIES_API_URL)
         response.raise_for_status()
         return response.json()
     except Exception as e:
@@ -178,7 +165,7 @@ def fetch_all_categories():
 
 
 async def fetch_products_by_category(category_id):
-    url = f"{PRODUCTS_API_URL}?category_id={category_id}"
+    url = f"{Config.PRODUCTS_API_URL}?category_id={category_id}"
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as response:
@@ -226,8 +213,8 @@ ProTaxi ID: {user_info[1]}
 def send_order_email(user_id, cart_items, total):
     try:
         msg = MIMEMultipart()
-        msg['From'] = EMAIL_HOST_USER
-        msg['To'] = EMAIL_RECIPIENT
+        msg['From'] = Config.EMAIL_HOST_USER
+        msg['To'] = Config.EMAIL_RECIPIENT
         msg['Subject'] = f'Новый заказ #{user_id} от {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}'
 
         message_text = format_order_email(user_id, cart_items, total)
@@ -237,9 +224,9 @@ def send_order_email(user_id, cart_items, total):
 
         msg.attach(MIMEText(message_text, 'plain'))
 
-        with smtplib.SMTP(EMAIL_HOST, EMAIL_PORT) as server:
+        with smtplib.SMTP(Config.EMAIL_HOST, Config.EMAIL_PORT) as server:
             server.starttls()
-            server.login(EMAIL_HOST_USER, EMAIL_HOST_PASSWORD)
+            server.login(Config.EMAIL_HOST_USER, Config.EMAIL_HOST_PASSWORD)
             server.send_message(msg)
 
         logger.info(f"Order email sent successfully for user {user_id}")
