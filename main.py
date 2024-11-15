@@ -44,7 +44,6 @@ user_states = {}
 
 # Функции проверки API
 async def check_protaxi_id(protaxi_id):
-    """Проверка ProTaxi ID через API"""
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(f"{CHECK_ID_URL}?id={protaxi_id}") as response:
@@ -58,7 +57,6 @@ async def check_protaxi_id(protaxi_id):
 
 
 async def verify_login(protaxi_id, password):
-    """Проверка логина через API"""
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(f"{LOGIN_URL}?id={protaxi_id}&password={password}") as response:
@@ -197,15 +195,12 @@ async def fetch_products_by_category(category_id):
 from datetime import datetime
 
 def format_order_email(user_id, cart_items, total):
-    # Получаем информацию о пользователе из базы данных
     user_info = db.get_user(user_id)
     if not user_info:
         return None
 
-    # Получаем текущее время для заказа
     order_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # Стартовое сообщение
     message_text = f"""
 Новый заказ #{user_id}
 Дата и время: {order_time}
@@ -217,7 +212,7 @@ ProTaxi ID: {user_info[1]}
 Состав заказа:
 -------------------------
 """
-    # Форматируем каждый элемент корзины
+    # Форматирование каждого элемента корзины
     for name, price, quantity in cart_items:
         item_total = price * quantity
         message_text += f"{name.ljust(25)} {str(quantity).rjust(3)} шт. × {str(price).rjust(8)} ProCoin = {str(item_total).rjust(8)} ProCoin\n"
