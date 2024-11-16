@@ -52,7 +52,8 @@ async def verify_login(protaxi_id, password):
             async with session.get(f"{Config.LOGIN_URL}?id={protaxi_id}&password={password}") as response:
                 if response.status == 200:
                     data = await response.json()
-                    return data.get('success') is True
+                    # Проверяем наличие объекта success в ответе
+                    return 'success' in data and isinstance(data['success'], dict)
                 return False
     except Exception as e:
         logger.error(f"Error verifying login: {e}")
