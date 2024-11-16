@@ -353,6 +353,15 @@ def handle_callback(call):
                             types.InlineKeyboardButton(
                                 "🛒 Корзина",
                                 callback_data="cart"
+                            ),
+                            #
+                            # types.InlineKeyboardButton(
+                            #     "🛒 Корзина",
+                            #     callback_data="cart"
+                            # ),
+                            types.InlineKeyboardButton(
+                                "◀️ Вернуться назад",
+                                callback_data="categories"
                             )
                         )
 
@@ -377,6 +386,14 @@ def handle_callback(call):
                             types.InlineKeyboardButton(
                                 "🛒 Корзина",
                                 callback_data="cart"
+                            ),
+                            # types.InlineKeyboardButton(
+                            #     "🛒 Корзина",
+                            #     callback_data="cart"
+                            # ),
+                            types.InlineKeyboardButton(
+                                "◀️ К категориям",
+                                callback_data="categories"
                             )
 
                         )
@@ -400,7 +417,18 @@ def handle_callback(call):
                         types.InlineKeyboardButton(
                             "🛒 Корзина",
                             callback_data="cart"
+                        ),
+
+                        types.InlineKeyboardButton(
+                            "🛒 Корзина",
+                            callback_data="cart"
+                        ),
+                        types.InlineKeyboardButton(
+                            "◀️ К категориям",
+                            callback_data="categories"
                         )
+
+
                     )
 
                     bot.send_message(chat_id, text, reply_markup=markup)
@@ -429,7 +457,6 @@ def handle_callback(call):
                         "❌ Убрать из корзины",
                         callback_data=f"remove_{category_id}_{product_id}"
                     ),
-
                     types.InlineKeyboardButton(
                         "🛒 Корзина",
                         callback_data="cart"
@@ -479,7 +506,8 @@ def handle_callback(call):
                         types.InlineKeyboardButton(
                             "❌ Убрать из корзины",
                             callback_data=f"remove_{category_id}_{product_id}"
-                        )
+                        ),
+
                     )
 
                     quantity_text = f"\n🛍 В корзине: {quantity} шт." if quantity > 0 else ""
