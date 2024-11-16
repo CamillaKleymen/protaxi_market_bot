@@ -28,7 +28,6 @@ bot = telebot.TeleBot(Config.API_TOKEN)
 # Состояния пользователей
 user_states = {}
 
-
 # Функции проверки API
 async def check_protaxi_id(protaxi_id):
     try:
@@ -36,14 +35,18 @@ async def check_protaxi_id(protaxi_id):
             async with session.get(f"{Config.CHECK_ID_URL}?id={protaxi_id}") as response:
                 if response.status == 200:
                     data = await response.json()
-                    return data.get('success') is True
-                return False
+                    return {
+                        'success': data.get('success') is True,
+                        'balance': data.get('balance', 0)  # Get balance from JSON response
+                    }
+                return {'success': False, 'balance': 0}
     except Exception as e:
         logger.error(f"Error checking ProTaxi ID: {e}")
-        return False
+        return {'success': False, 'balance': 0}
 
 
 async def verify_login(protaxi_id, password):
+    """Проверка логина через API"""
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(f"{Config.LOGIN_URL}?id={protaxi_id}&password={password}") as response:
@@ -82,10 +85,12 @@ def process_protaxi_id(message):
         user_id = message.from_user.id
         protaxi_id = message.text.strip()
 
-        if asyncio.run(check_protaxi_id(protaxi_id)):
+        result = asyncio.run(check_protaxi_id(protaxi_id))
+        if result['success']:
             user_states[user_id] = {
                 'state': 'waiting_for_password',
-                'protaxi_id': protaxi_id
+                'protaxi_id': protaxi_id,
+                'balance': result['balance']  # Store balance in user_states
             }
             bot.send_message(
                 message.chat.id,
@@ -136,6 +141,10 @@ def process_password(message):
         logger.error(f"Process password error: {e}")
         bot.send_message(message.chat.id, "❌ Произошла ошибка. Попробуйте /start снова.")
 
+
+async def get_current_balance(protaxi_id):
+    result = await check_protaxi_id(protaxi_id)
+    return result['balance']
 
 # API функции
 async def fetch_product_data(url):
@@ -199,7 +208,7 @@ ProTaxi ID: {user_info[1]}
 Состав заказа:
 -------------------------
 """
-    # Форматирование каждого элемента корзины
+    # Форматируем каждый элемент корзины
     for name, price, quantity in cart_items:
         item_total = price * quantity
         message_text += f"{name.ljust(25)} {str(quantity).rjust(3)} шт. × {str(price).rjust(8)} ProCoin = {str(item_total).rjust(8)} ProCoin\n"
@@ -255,24 +264,39 @@ def handle_callback(call):
     try:
         chat_id = call.message.chat.id
         message_id = call.message.message_id
+        user_id = call.from_user.id
+
+        async def get_user_balance(protaxi_id):
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(f"{Config.CHECK_ID_URL}?id={protaxi_id}") as response:
+                        if response.status == 200:
+                            data = await response.json()
+                            return data.get('balance', 0)
+                        return 0
+            except Exception as e:
+                logger.error(f"Error getting user balance: {e}")
+                return 0
 
         if call.data == "main_menu":
-            bot.edit_message_text(
-                "📋 Главное меню:",
-                chat_id,
-                message_id,
-                reply_markup=Keyboard.main_menu()
-            )
-
-        elif call.data == "categories":
-            categories = fetch_all_categories()
-            if not categories:
+            try:
                 bot.edit_message_text(
-                    "😔 К сожалению, категории временно недоступны.",
+                    "📋 Главное меню:",
                     chat_id,
                     message_id,
                     reply_markup=Keyboard.main_menu()
                 )
+            except telebot.apihelper.ApiException:
+                bot.send_message(
+                    chat_id,
+                    "📋 Главное меню:",
+                    reply_markup=Keyboard.main_menu()
+                )
+
+        elif call.data == "categories":
+            categories = fetch_all_categories()
+            if not categories:
+                bot.answer_callback_query(call.id, "😔 Категории временно недоступны")
                 return
 
             markup = types.InlineKeyboardMarkup(row_width=1)
@@ -284,12 +308,20 @@ def handle_callback(call):
                 markup.add(category_button)
             markup.add(types.InlineKeyboardButton("◀️ Назад", callback_data="main_menu"))
 
-            bot.edit_message_text(
-                "📂 Выберите категорию:",
-                chat_id,
-                message_id,
-                reply_markup=markup
-            )
+            try:
+                bot.edit_message_text(
+                    "📂 Выберите категорию:",
+                    chat_id,
+                    message_id,
+                    reply_markup=markup
+                )
+            except telebot.apihelper.ApiException:
+                bot.send_message(
+                    chat_id,
+                    "📂 Выберите категорию:",
+                    reply_markup=markup
+                )
+
 
         elif call.data.startswith("show_products_"):
             category_id = call.data.split("_")[2]
@@ -307,22 +339,71 @@ def handle_callback(call):
             bot.delete_message(chat_id, message_id)
 
             for product in products:
-                text = (f"📦 {product['name']}\n"
-                        f"💰 Цена: {product['price']} {product['currency']}\n")
+                try:
+                    if 'image' in product and product['image']:
+                        text = (f"📦 {product['name']}\n"
+                                f"💰 Цена: {product['price']} {product['currency']}\n")
+                        markup = types.InlineKeyboardMarkup(row_width=2)
+                        markup.add(
+                            types.InlineKeyboardButton(
+                                "✅ Добавить в корзину",
+                                callback_data=f"add_{category_id}_{product['id']}"
+                            ),
 
-                markup = types.InlineKeyboardMarkup(row_width=2)
-                markup.add(
-                    types.InlineKeyboardButton(
-                        "✅ Добавить в корзину",
-                        callback_data=f"add_{category_id}_{product['id']}"
-                    ),
-                    types.InlineKeyboardButton(
-                        "🛒 Корзина",
-                        callback_data="cart"
+                            types.InlineKeyboardButton(
+                                "🛒 Корзина",
+                                callback_data="cart"
+                            )
+                        )
+
+                        bot.send_photo(
+                            chat_id,
+                            photo=product['image'],
+                            caption=text,
+                            reply_markup=markup
+                        )
+
+                    else:
+                        text = (f"📦 {product['name']}\n"
+                                f"💰 Цена: {product['price']} {product['currency']}\n")
+
+                        markup = types.InlineKeyboardMarkup(row_width=2)
+                        markup.add(
+                            types.InlineKeyboardButton(
+                                "✅ Добавить в корзину",
+                                callback_data=f"add_{category_id}_{product['id']}"
+                            ),
+
+                            types.InlineKeyboardButton(
+                                "🛒 Корзина",
+                                callback_data="cart"
+                            )
+
+                        )
+
+                        bot.send_message(chat_id, text, reply_markup=markup)
+
+                except Exception as e:
+                    logger.error(f"Error sending product with image: {e}")
+
+                    text = (f"📦 {product['name']}\n"
+                            f"💰 Цена: {product['price']} {product['currency']}\n")
+
+                    markup = types.InlineKeyboardMarkup(row_width=2)
+
+                    markup.add(
+                        types.InlineKeyboardButton(
+                            "✅ Добавить в корзину",
+                            callback_data=f"add_{category_id}_{product['id']}"
+                        ),
+
+                        types.InlineKeyboardButton(
+                            "🛒 Корзина",
+                            callback_data="cart"
+                        )
                     )
-                )
 
-                bot.send_message(chat_id, text, reply_markup=markup)
+                    bot.send_message(chat_id, text, reply_markup=markup)
 
         elif call.data.startswith("add_"):
             _, category_id, product_id = call.data.split("_")
@@ -336,6 +417,39 @@ def handle_callback(call):
 
             if product:
                 db.add_to_cart(chat_id, int(product_id), product['name'], product['price'])
+
+                quantity = db.get_item_quantity(chat_id, int(product_id))
+                markup = types.InlineKeyboardMarkup(row_width=2)
+                markup.add(
+                    types.InlineKeyboardButton(
+                        "✅ Добавить в корзину",
+                        callback_data=f"add_{category_id}_{product_id}"
+                    ),
+                    types.InlineKeyboardButton(
+                        "❌ Убрать из корзины",
+                        callback_data=f"remove_{category_id}_{product_id}"
+                    ),
+
+                    types.InlineKeyboardButton(
+                        "🛒 Корзина",
+                        callback_data="cart"
+                    ),
+                    types.InlineKeyboardButton(
+                        "◀️ К категориям",
+                        callback_data="categories"
+                    )
+                )
+
+                try:
+                    bot.edit_message_text(
+                        f"📦 {product['name']}\n💰 Цена: {product['price']} ProCoin\n🛍 В корзине: {quantity} шт.",
+                        chat_id,
+                        message_id,
+                        reply_markup=markup
+                    )
+                except telebot.apihelper.ApiException:
+                    pass
+
                 bot.answer_callback_query(
                     call.id,
                     f"✅ {product['name']} добавлен в корзину"
@@ -343,15 +457,67 @@ def handle_callback(call):
             else:
                 bot.answer_callback_query(call.id, "❌ Товар не найден")
 
+        elif call.data.startswith("remove_"):
+            _, category_id, product_id = call.data.split("_")
+            products = asyncio.run(fetch_products_by_category(category_id))
+
+            if not products:
+                bot.answer_callback_query(call.id, "❌ Ошибка получения данных о товаре")
+                return
+
+            product = next((p for p in products if str(p['id']) == product_id), None)
+
+            if product:
+                if db.remove_from_cart(chat_id, int(product_id)):
+                    quantity = db.get_item_quantity(chat_id, int(product_id))
+                    markup = types.InlineKeyboardMarkup(row_width=2)
+                    markup.add(
+                        types.InlineKeyboardButton(
+                            "✅ Добавить в корзину",
+                            callback_data=f"add_{category_id}_{product_id}"
+                        ),
+                        types.InlineKeyboardButton(
+                            "❌ Убрать из корзины",
+                            callback_data=f"remove_{category_id}_{product_id}"
+                        )
+                    )
+
+                    quantity_text = f"\n🛍 В корзине: {quantity} шт." if quantity > 0 else ""
+                    try:
+                        bot.edit_message_text(
+                            f"📦 {product['name']}\n💰 Цена: {product['price']} ProCoin{quantity_text}",
+                            chat_id,
+                            message_id,
+                            reply_markup=markup
+                        )
+                    except telebot.apihelper.ApiException:
+                        pass
+
+                    bot.answer_callback_query(
+                        call.id,
+                        f"✅ {product['name']} удален из корзины"
+                    )
+                else:
+                    bot.answer_callback_query(call.id, "❌ Товар не найден в корзине")
+            else:
+                bot.answer_callback_query(call.id, "❌ Товар не найден")
+
         elif call.data == "cart":
             cart_items = db.get_cart(chat_id)
             if not cart_items:
-                bot.edit_message_text(
-                    "🛒 Ваша корзина пуста",
-                    chat_id,
-                    message_id,
-                    reply_markup=Keyboard.main_menu()
-                )
+                try:
+                    bot.edit_message_text(
+                        "🛒 Ваша корзина пуста",
+                        chat_id,
+                        message_id,
+                        reply_markup=Keyboard.main_menu()
+                    )
+                except telebot.apihelper.ApiException:
+                    bot.send_message(
+                        chat_id,
+                        "🛒 Ваша корзина пуста",
+                        reply_markup=Keyboard.main_menu()
+                    )
                 return
 
             cart_text = "🛒 Ваша корзина:\n\n"
@@ -359,14 +525,14 @@ def handle_callback(call):
             for name, price, quantity in cart_items:
                 item_total = price * quantity
                 total += item_total
-                cart_text += f"• {name} - {quantity} x {price} = {item_total}ProCoin\n"
-            cart_text += f"\n💰 Итого: {total}ProCoin"
+                cart_text += f"• {name}\n  {quantity} × {price} = {item_total} ProCoin\n"
+            cart_text += f"\n💰 Итого: {total} ProCoin"
 
             markup = types.InlineKeyboardMarkup(row_width=1)
             markup.add(
                 types.InlineKeyboardButton("💳 Оформить заказ", callback_data="checkout"),
-                types.InlineKeyboardButton("🗑 Очистить корзину", callback_data="clear_cart"),
-                types.InlineKeyboardButton("◀️ Назад", callback_data="main_menu")
+                types.InlineKeyboardButton("♻ Очистить корзину", callback_data="clear_cart"),
+                types.InlineKeyboardButton("◀️ Продолжить покупки", callback_data="categories")
             )
 
             try:
@@ -381,37 +547,74 @@ def handle_callback(call):
                     chat_id,
                     cart_text,
                     reply_markup=markup
-            )
+                )
 
         elif call.data == "clear_cart":
             db.clear_cart(chat_id)
-            bot.edit_message_text(
-                "🗑 Корзина очищена!",
-                chat_id,
-                message_id,
-                reply_markup=Keyboard.main_menu()
-            )
+            try:
+                bot.edit_message_text(
+                    "🗑 Корзина очищена!",
+                    chat_id,
+                    message_id,
+                    reply_markup=Keyboard.main_menu()
+                )
+            except telebot.apihelper.ApiException:
+                bot.send_message(
+                    chat_id,
+                    "🗑 Корзина очищена!",
+                    reply_markup=Keyboard.main_menu()
+                )
 
         elif call.data == "checkout":
             cart_items = db.get_cart(chat_id)
             if not cart_items:
-                bot.edit_message_text(
-                    "🛒 Ваша корзина пуста.",
-                    chat_id,
-                    message_id,
-                    reply_markup=Keyboard.main_menu()
-                )
+                bot.answer_callback_query(call.id, "🛒 Ваша корзина пуста")
                 return
 
             total = sum(item[1] * item[2] for item in cart_items)
-            if send_order_email(chat_id, cart_items, total):
-                db.clear_cart(chat_id)
+
+            user_info = db.get_user(user_id)
+            if not user_info:
+                bot.answer_callback_query(call.id, "❌ Ошибка получения данных пользователя")
+                return
+
+            protaxi_id = user_info[1]
+
+            # Проверяем баланс пользователя
+            user_balance = asyncio.run(get_user_balance(protaxi_id))
+
+            if total > user_balance:
+                bot.answer_callback_query(call.id)
                 bot.edit_message_text(
-                    "✅ Заказ успешно оформлен! Мы свяжемся с вами в ближайшее время.",
+                    "❌ У вас недостаточно баллов для оформления заказа.\n"
+                    "Попробуйте удалить из корзины некоторые товары и попробуйте снова.\n\n"
+                    f"Сумма заказа: {total} ProCoin\n"
+                    f"Ваш баланс: {user_balance} ProCoin",
                     chat_id,
                     message_id,
-                    reply_markup=Keyboard.main_menu()
+                    reply_markup=types.InlineKeyboardMarkup().add(
+                        types.InlineKeyboardButton("◀️ Вернуться в корзину", callback_data="cart")
+                    )
                 )
+                return
+
+            if send_order_email(chat_id, cart_items, total):
+                db.clear_cart(chat_id)
+                try:
+                    bot.edit_message_text(
+                        "✅ Заказ успешно оформлен!\n"
+                        "Мы свяжемся с вами в ближайшее время.",
+                        chat_id,
+                        message_id,
+                        reply_markup=Keyboard.main_menu()
+                    )
+                except telebot.apihelper.ApiException:
+                    bot.send_message(
+                        chat_id,
+                        "✅ Заказ успешно оформлен!\n"
+                        "Мы свяжемся с вами в ближайшее время.",
+                        reply_markup=Keyboard.main_menu()
+                    )
             else:
                 bot.edit_message_text(
                     "❌ Ошибка при оформлении заказа. Пожалуйста, попробуйте позже.",
@@ -422,13 +625,18 @@ def handle_callback(call):
 
     except Exception as e:
         logger.error(f"Callback handling error: {e}")
-        bot.send_message(chat_id, "❌ Произошла ошибка. Попробуйте позже.")
+        try:
+            bot.answer_callback_query(
+                call.id,
+                "❌ Произошла ошибка. Попробуйте еще раз."
+            )
+        except:
+            pass
 
     def main():
         urls = [
             "https://protaxi-market.uz/module/shop/api/get-all-products"
         ]
-
         results = asyncio.run(fetch_all_products())
 
         for result in results:
