@@ -60,6 +60,8 @@ async def verify_login(protaxi_id, password):
         return False
 
 
+
+
 # Старт бота и регистрация
 @bot.message_handler(commands=['start'])
 def start(message):
@@ -118,6 +120,7 @@ def process_password(message):
 
         password = message.text.strip()
         protaxi_id = user_states[user_id]['protaxi_id']
+        balance = user_states[user_id]['balance']  # Get balance from stored state
 
         if asyncio.run(verify_login(protaxi_id, password)):
             if not db.get_user(user_id):
@@ -127,9 +130,10 @@ def process_password(message):
 
             bot.send_message(
                 message.chat.id,
-                "✅ Авторизация успешна!\n\n"
-                "🛍 Добро пожаловать в наш магазин!\n"
-                "Выберите раздел из меню ниже:"
+                f"✅ Авторизация успешна!\n\n"
+                f"💰 Ваш текущий баланс: {balance} ProCoin\n\n"
+                f"🛍 Добро пожаловать в наш магазин!\n"
+                f"Выберите раздел из меню ниже:"
             )
             show_main_menu(message.chat.id)
         else:
@@ -141,7 +145,6 @@ def process_password(message):
     except Exception as e:
         logger.error(f"Process password error: {e}")
         bot.send_message(message.chat.id, "❌ Произошла ошибка. Попробуйте /start снова.")
-
 
 async def get_current_balance(protaxi_id):
     result = await check_protaxi_id(protaxi_id)

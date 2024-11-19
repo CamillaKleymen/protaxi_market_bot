@@ -1,4 +1,8 @@
 from telebot import types
+
+from lang import Languages
+
+
 # настройка клавиатуры и  работа кнопок
 class Keyboard:
     @staticmethod
@@ -36,3 +40,4 @@ class Keyboard:
         back = types.InlineKeyboardButton("◀️ Назад", callback_data="main_menu")
         markup.add(checkout, clear, back)
         return markup
+
