@@ -6,6 +6,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from database import db
 from buttons import Keyboard
+from lang import Languages
 
 import aiohttp
 import asyncio
@@ -27,6 +28,46 @@ bot = telebot.TeleBot(Config.API_TOKEN)
 
 # Состояния пользователей
 user_states = {}
+
+
+# Добавим функцию для выбора языка перед авторизацией
+def choose_language(message):
+    try:
+        user_id = message.from_user.id
+        markup = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
+        russian_btn = types.KeyboardButton("🇷🇺 Русский")
+        uzbek_btn = types.KeyboardButton("🇺🇿 O'zbek")
+        markup.add(russian_btn, uzbek_btn)
+
+        bot.send_message(
+            message.chat.id,
+            "Выберите язык / Tilni tanlang:",
+            reply_markup=markup
+        )
+        bot.register_next_step_handler(message, set_user_language)
+    except Exception as e:
+        logger.error(f"Language choose error: {e}")
+        bot.send_message(message.chat.id, "❌ Произошла ошибка. Попробуйте позже.")
+
+
+def set_user_language(message):
+    try:
+        user_id = message.from_user.id
+        language = 'ru' if message.text == "🇷🇺 Русский" else 'uz'
+
+        db.set_user_language(user_id, language)
+
+        bot.send_message(
+            message.chat.id,
+            Languages.get_string(language, 'welcome'),
+            reply_markup=types.ReplyKeyboardRemove()
+        )
+        user_states[user_id] = {'state': 'waiting_for_id', 'language': language}
+        bot.register_next_step_handler(message, process_protaxi_id)
+    except Exception as e:
+        logger.error(f"Set user language error: {e}")
+        bot.send_message(message.chat.id, "❌ Произошла ошибка. Попробуйте позже.")
+
 
 # Функции проверки API
 async def check_protaxi_id(protaxi_id):
@@ -70,57 +111,55 @@ def start(message):
         user = db.get_user(user_id)
 
         if not user:
-            bot.send_message(
-                message.chat.id,
-                "👋 Добро пожаловать! Введите пожалуйста Ваш ProTaxi ID:"
-            )
-            user_states[user_id] = {'state': 'waiting_for_id'}
-            bot.register_next_step_handler(message, process_protaxi_id)
+            choose_language(message)
         else:
-            show_main_menu(message.chat.id)
+            user_language = db.get_user_language(user_id)
+            show_main_menu(message.chat.id, user_language)
     except Exception as e:
         logger.error(f"Start error: {e}")
         bot.send_message(message.chat.id, "❌ Произошла ошибка. Попробуйте позже.")
 
-
+# Модифицируем process_protaxi_id
 def process_protaxi_id(message):
     try:
         user_id = message.from_user.id
         protaxi_id = message.text.strip()
+        language = user_states[user_id]['language']
 
         result = asyncio.run(check_protaxi_id(protaxi_id))
         if result['success']:
-            user_states[user_id] = {
+            user_states[user_id].update({
                 'state': 'waiting_for_password',
                 'protaxi_id': protaxi_id,
-                'balance': result['balance']  # Store balance in user_states
-            }
+                'balance': result['balance']
+            })
             bot.send_message(
                 message.chat.id,
-                "✅ ID подтвержден. Пожалуйста, введите ваш пароль:"
+                Languages.get_string(language, 'id_confirmed')
             )
             bot.register_next_step_handler(message, process_password)
         else:
             bot.send_message(
                 message.chat.id,
-                "❌ Такого ProTaxi ID не существует. Пожалуйста, проверьте и введите корректный ID:"
+                Languages.get_string(language, 'invalid_id')
             )
             bot.register_next_step_handler(message, process_protaxi_id)
     except Exception as e:
         logger.error(f"Process ProTaxi ID error: {e}")
-        bot.send_message(message.chat.id, "❌ Произошла ошибка. Попробуйте /start снова.")
+        bot.send_message(message.chat.id, Languages.get_string('ru', 'restart'))
 
-
+# Модифицируем другие функции аналогично, используя Languages.get_string()
 def process_password(message):
     try:
         user_id = message.from_user.id
         if user_id not in user_states:
-            bot.send_message(message.chat.id, "❌ Ошибка сессии. Пожалуйста, начните сначала с команды /start")
+            bot.send_message(message.chat.id, Languages.get_string('ru', 'session_error'))
             return
 
         password = message.text.strip()
         protaxi_id = user_states[user_id]['protaxi_id']
-        balance = user_states[user_id]['balance']  # Get balance from stored state
+        balance = user_states[user_id]['balance']
+        language = user_states[user_id]['language']
 
         if asyncio.run(verify_login(protaxi_id, password)):
             if not db.get_user(user_id):
@@ -130,21 +169,19 @@ def process_password(message):
 
             bot.send_message(
                 message.chat.id,
-                f"✅ Авторизация успешна!\n\n"
-                f"💰 Ваш текущий баланс: {balance} ProCoin\n\n"
-                f"🛍 Добро пожаловать в наш магазин!\n"
-                f"Выберите раздел из меню ниже:"
+                Languages.get_string(language, 'auth_success').format(balance)
             )
-            show_main_menu(message.chat.id)
+            show_main_menu(message.chat.id, language)
         else:
             bot.send_message(
                 message.chat.id,
-                "❌ Неверный пароль. Пожалуйста, попробуйте еще раз:"
+                Languages.get_string(language, 'invalid_password')
             )
             bot.register_next_step_handler(message, process_password)
     except Exception as e:
         logger.error(f"Process password error: {e}")
-        bot.send_message(message.chat.id, "❌ Произошла ошибка. Попробуйте /start снова.")
+        bot.send_message(message.chat.id, Languages.get_string('ru', 'restart'))
+
 
 async def get_current_balance(protaxi_id):
     result = await check_protaxi_id(protaxi_id)
@@ -249,17 +286,17 @@ def send_order_email(user_id, cart_items, total):
         return False
 
 
-# Вспомогательные функции
-def show_main_menu(chat_id):
+# Модифицируем show_main_menu
+def show_main_menu(chat_id, language='ru'):
     try:
         bot.send_message(
             chat_id,
-            "📋 Главное меню:",
-            reply_markup=Keyboard.main_menu()
+            Languages.get_string(language, 'main_menu'),
+            reply_markup=Keyboard.main_menu(language)
         )
     except Exception as e:
         logger.error(f"Show main menu error: {e}")
-        bot.send_message(chat_id, "❌ Произошла ошибка. Попробуйте позже.")
+        bot.send_message(chat_id, Languages.get_string('ru', 'error'))
 
 
 # Обработчик callback-запросов

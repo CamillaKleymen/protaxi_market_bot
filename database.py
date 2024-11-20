@@ -1,6 +1,5 @@
 import sqlite3
 import logging
-import requests
 
 # Настройка логирования
 logging.basicConfig(
@@ -15,8 +14,10 @@ class Database:
         self.conn = sqlite3.connect('users.db', check_same_thread=False)
         self.cursor = self.conn.cursor()
         self.create_tables()
+        self.migrate_database()
 
     def create_tables(self):
+        """Создает основные таблицы в базе данных."""
         # Создание таблицы пользователей
         self.cursor.execute('''CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
@@ -34,6 +35,19 @@ class Database:
             quantity INTEGER DEFAULT 1
         )''')
         self.conn.commit()
+
+    def migrate_database(self):
+        """Добавляет недостающие колонки в таблицы базы данных."""
+        try:
+            # Проверяем и добавляем колонку 'language' в таблицу 'users', если она отсутствует
+            self.cursor.execute("PRAGMA table_info(users)")
+            columns = [column[1] for column in self.cursor.fetchall()]
+            if 'language' not in columns:
+                self.cursor.execute("ALTER TABLE users ADD COLUMN language TEXT DEFAULT 'ru'")
+                self.conn.commit()
+                logger.info("Column 'language' added to 'users' table.")
+        except Exception as e:
+            logger.error(f"Error migrating database: {e}")
 
     def add_user(self, user_id, protaxi_id, phone=None):
         """Добавляет пользователя в базу данных."""
@@ -54,6 +68,26 @@ class Database:
         except Exception as e:
             logger.error(f"Error getting user: {e}")
             return None
+
+    def set_user_language(self, user_id, language):
+        """Устанавливает язык пользователя."""
+        try:
+            self.cursor.execute('UPDATE users SET language = ? WHERE user_id = ?', (language, user_id))
+            self.conn.commit()
+            return True
+        except Exception as e:
+            logger.error(f"Error setting user language: {e}")
+            return False
+
+    def get_user_language(self, user_id):
+        """Получает язык пользователя."""
+        try:
+            self.cursor.execute('SELECT language FROM users WHERE user_id = ?', (user_id,))
+            result = self.cursor.fetchone()
+            return result[0] if result else 'ru'  # 'ru' по умолчанию
+        except Exception as e:
+            logger.error(f"Error getting user language: {e}")
+            return 'ru'
 
     def add_to_cart(self, user_id, product_id, product_name, product_price):
         """Добавляет товар в корзину или обновляет количество товара."""
@@ -81,7 +115,6 @@ class Database:
         """Очищает корзину пользователя."""
         self.cursor.execute('DELETE FROM cart WHERE user_id = ?', (user_id,))
         self.conn.commit()
-
 
     def get_item_quantity(self, user_id, product_id):
         """Получает количество определенного товара в корзине пользователя."""
@@ -125,6 +158,7 @@ class Database:
         except Exception as e:
             logger.error(f"Error removing item from cart: {e}")
             return False
+
 
 # Инициализация базы данных
 db = Database()

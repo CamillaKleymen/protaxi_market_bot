@@ -3,7 +3,7 @@ from telebot import types
 from lang import Languages
 
 
-# настройка клавиатуры и  работа кнопок
+# настройка клавиатуры и работа кнопок
 class Keyboard:
     @staticmethod
     def get_phone_number():
@@ -13,13 +13,12 @@ class Keyboard:
         return markup
 
     @staticmethod
-    def main_menu():
+    def main_menu(language='ru'):
         markup = types.InlineKeyboardMarkup(row_width=2)
-        catalog = types.InlineKeyboardButton("🛍 Каталог", callback_data="categories")
-        cart = types.InlineKeyboardButton("🛒 Корзина", callback_data="cart")
-        # support = types.InlineKeyboardButton("💬 Поддержка/Отзыв", callback_data="support")
-        # feedback = types.InlineKeyboardButton("📝 Отзыв", callback_data="feedback")
-        markup.add(catalog, cart)
+        markup.add(
+            types.InlineKeyboardButton(Languages.get_string(language, 'catalog'), callback_data="categories"),
+            types.InlineKeyboardButton(Languages.get_string(language, 'cart'), callback_data="cart")
+        )
         return markup
 
     @staticmethod
