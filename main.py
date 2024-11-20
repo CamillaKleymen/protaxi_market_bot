@@ -158,21 +158,22 @@ def process_password(message):
 
         password = message.text.strip()
         protaxi_id = user_states[user_id]['protaxi_id']
-        balance = user_states[user_id]['balance']
+        balance = user_states[user_id]['balance']  # Баланс уже сохранен ранее
         language = user_states[user_id]['language']
 
         if asyncio.run(verify_login(protaxi_id, password)):
             if not db.get_user(user_id):
                 db.add_user(user_id, protaxi_id, f"ProTaxi_{protaxi_id}")
-                # Сохраняем язык пользователя в БД
                 db.set_user_language(user_id, language)
 
-            # Не удаляем user_states полностью, а только статус авторизации
+            # Форматируем приветственное сообщение с балансом
+            welcome_message = Languages.get_string(language, 'auth_success').format(balance)
+
             user_states[user_id] = {'language': language}
 
             bot.send_message(
                 message.chat.id,
-                Languages.get_string(language, 'auth_success'),
+                welcome_message,
                 reply_markup=types.ReplyKeyboardRemove()
             )
             show_main_menu(message.chat.id, language)

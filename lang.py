@@ -55,6 +55,9 @@ class Languages:
             'back_to_cart': "◀️ Вернуться в корзину",
             'user_data_error': "❌ Ошибка получения данных пользователя",
             'product_not_in_cart': "❌ Товар не находится в корзине",
+
+            'auth_success': "✅ Авторизация успешна!\n\n🛍 Добро пожаловать в наш магазин!\n💰 Ваш баланс: {} ProCoin\n\nВыберите раздел из меню ниже:",
+
         },
 
         'uz': {
@@ -110,6 +113,10 @@ class Languages:
             'back_to_cart': "◀️ Savatchaga qaytish",
             'user_data_error': "❌ Foydalanuvchi ma'lumotlarini olishda xatolik",
             'product_not_in_cart': "❌ Mahsulot savatchada yo'q",
+
+            'auth_success': "✅ Avtorizatsiya muvaffaqiyatli!\n\n🛍 Bizning do'konimizga xush kelibsiz!\n💰 Sizning balansingiz: {} ProCoin\n\nQuyidagi menyudan bo'limni tanlang:",
+
+
         }
     }
 
