@@ -48,7 +48,13 @@ class Languages:
 
             # Категории
             'categories_unavailable': "😔 Категории временно недоступны",
-            'no_products_in_category': "😔 К сожалению, товары в данной категории временно недоступны."
+            'no_products_in_category': "😔 К сожалению, товары в данной категории временно недоступны.",
+
+            'cart_header': "🛒 Содержимое корзины:",
+            'cart_item': "📦 {}: {} шт. × {} ProCoin = {} ProCoin\n",
+            'back_to_cart': "◀️ Вернуться в корзину",
+            'user_data_error': "❌ Ошибка получения данных пользователя",
+            'product_not_in_cart': "❌ Товар не находится в корзине",
         },
 
         'uz': {
@@ -97,7 +103,13 @@ class Languages:
 
             # Категории
             'categories_unavailable': "😔 Kategoriyalar vaqtincha mavjud emas",
-            'no_products_in_category': "😔 Afsuski, ushbu kategoriyada mahsulotlar vaqtincha mavjud emas."
+            'no_products_in_category': "😔 Afsuski, ushbu kategoriyada mahsulotlar vaqtincha mavjud emas.",
+
+            'cart_header': "🛒 Savatcha tarkibi:",
+            'cart_item': "📦 {}: {} dona × {} ProCoin = {} ProCoin\n",
+            'back_to_cart': "◀️ Savatchaga qaytish",
+            'user_data_error': "❌ Foydalanuvchi ma'lumotlarini olishda xatolik",
+            'product_not_in_cart': "❌ Mahsulot savatchada yo'q",
         }
     }
 

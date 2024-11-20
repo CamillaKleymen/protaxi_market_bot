@@ -13,11 +13,17 @@ class Keyboard:
         return markup
 
     @staticmethod
-    def main_menu(language='ru'):
+    def main_menu(language):
         markup = types.InlineKeyboardMarkup(row_width=2)
         markup.add(
-            types.InlineKeyboardButton(Languages.get_string(language, 'catalog'), callback_data="categories"),
-            types.InlineKeyboardButton(Languages.get_string(language, 'cart'), callback_data="cart")
+            types.InlineKeyboardButton(
+                Languages.get_string(language, 'catalog'),
+                callback_data="categories"
+            ),
+            types.InlineKeyboardButton(
+                Languages.get_string(language, 'cart'),
+                callback_data="cart"
+            )
         )
         return markup
 
