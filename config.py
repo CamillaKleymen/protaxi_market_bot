@@ -20,7 +20,7 @@ class Config:
     LOGIN_URL = f"{BASE_API_URL}/login"
     CATEGORIES_API_URL = f"{BASE_API_URL}/get-all-categories"
     PRODUCTS_API_URL = f"{BASE_API_URL}/get-all-products"
-
+    SUBMIT_API_URL = f"{BASE_API_URL}/submit"
 
 
     # # Конфигурация

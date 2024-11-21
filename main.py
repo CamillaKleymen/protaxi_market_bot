@@ -1,3 +1,4 @@
+import json
 import logging
 import smtplib
 import sqlite3
@@ -265,29 +266,78 @@ ProTaxi ID: {user_info[1]}
     return message_text
 
 
-def send_order_email(user_id, cart_items, total):
+def submit_order(user_id, cart_items, total):
     try:
-        msg = MIMEMultipart()
-        msg['From'] = Config.EMAIL_HOST_USER
-        msg['To'] = Config.EMAIL_RECIPIENT
-        msg['Subject'] = f'Новый заказ #{user_id} от {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}'
+        # Логируем начало процесса
+        logger.info(f"Starting order submission for user {user_id}")
+        logger.info(f"Total cart items: {len(cart_items)}")
+        logger.info(f"Total order value: {total} ProCoin")
 
-        message_text = format_order_email(user_id, cart_items, total)
-        if not message_text:
-            logger.error(f"Failed to format email for user {user_id}")
+        # Проверяем, пустая ли корзина
+        if not cart_items:
+            logger.warning(f"Attempt to submit empty order for user {user_id}")
             return False
 
-        msg.attach(MIMEText(message_text, 'plain'))
+        # Получаем информацию о пользователе
+        user_info = db.get_user(user_id)
+        if not user_info:
+            logger.error(f"Failed to find user info for user {user_id}")
+            return False
 
-        with smtplib.SMTP(Config.EMAIL_HOST, Config.EMAIL_PORT) as server:
-            server.starttls()
-            server.login(Config.EMAIL_HOST_USER, Config.EMAIL_HOST_PASSWORD)
-            server.send_message(msg)
+        protaxi_id = user_info[1]
+        logger.info(f"User ProTaxi ID: {protaxi_id}")
 
-        logger.info(f"Order email sent successfully for user {user_id}")
-        return True
+        # Подготавливаем данные для отправки
+        products_data = [
+            {
+                'id': str(item[0]),
+                'qty': str(item[2]),  # Количество
+                'total': str(item[1] * item[2])  # Цена * количество
+            } for item in cart_items
+        ]
+
+        # Логируем детали товаров в заказе
+        for product in products_data:
+            logger.info(
+                f"Product in order - ID: {product['id']}, Quantity: {product['qty']}, Total: {product['total']}")
+
+        data = {
+            'user': protaxi_id,
+            'products': products_data
+        }
+
+        # Логируем полные данные запроса
+        logger.info(f"Full order data: {json.dumps(data, indent=2)}")
+
+        # Отправляем POST-запрос
+        headers = {
+            'Content-type': 'application/json',
+            'Accept': 'text/plain'
+        }
+
+        logger.info(f"Sending order to URL: {Config.SUBMIT_API_URL}")
+
+        try:
+            response = requests.post(Config.SUBMIT_API_URL, data=json.dumps(data), headers=headers)
+
+            # Подробное логирование ответа
+            logger.info(f"Response status code: {response.status_code}")
+            logger.info(f"Response content: {response.text}")
+
+            # Проверяем успешность отправки
+            if response.status_code == 200:
+                logger.info(f"Order submitted successfully for user {user_id}")
+                return True
+            else:
+                logger.error(f"Failed to submit order. Status: {response.status_code}, Response: {response.text}")
+                return False
+
+        except requests.RequestException as req_error:
+            logger.error(f"Network error during order submission: {req_error}")
+            return False
+
     except Exception as e:
-        logger.error(f"Failed to send order email: {e}")
+        logger.error(f"Unexpected error during order submission: {e}", exc_info=True)
         return False
 
 
@@ -666,7 +716,7 @@ def handle_callback(call):
                 )
                 return
 
-            if send_order_email(chat_id, cart_items, total):
+            if submit_order(chat_id, cart_items, total):
                 db.clear_cart(chat_id)
                 try:
                     bot.edit_message_text(
