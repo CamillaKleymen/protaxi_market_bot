@@ -121,7 +121,7 @@ def start(message):
         bot.send_message(message.chat.id, "❌ Произошла ошибка. Попробуйте позже.")
 
 # Модифицируем process_protaxi_id
-def process_protaxi_id(message):
+async def process_protaxi_id(message):
     try:
         user_id = message.from_user.id
         protaxi_id = message.text.strip()
@@ -266,19 +266,16 @@ ProTaxi ID: {user_info[1]}
     return message_text
 
 
-def submit_order(user_id, cart_items, total):
+async def submit_order(user_id, cart_items, total):
     try:
-        # Логируем начало процесса
         logger.info(f"Starting order submission for user {user_id}")
         logger.info(f"Total cart items: {len(cart_items)}")
         logger.info(f"Total order value: {total} ProCoin")
 
-        # Проверяем, пустая ли корзина
         if not cart_items:
             logger.warning(f"Attempt to submit empty order for user {user_id}")
             return False
 
-        # Получаем информацию о пользователе
         user_info = db.get_user(user_id)
         if not user_info:
             logger.error(f"Failed to find user info for user {user_id}")
@@ -287,7 +284,6 @@ def submit_order(user_id, cart_items, total):
         protaxi_id = user_info[1]
         logger.info(f"User ProTaxi ID: {protaxi_id}")
 
-        # Подготавливаем данные для отправки
         products_data = [
             {
                 'id': str(item[0]),
@@ -296,7 +292,6 @@ def submit_order(user_id, cart_items, total):
             } for item in cart_items
         ]
 
-        # Логируем детали товаров в заказе
         for product in products_data:
             logger.info(
                 f"Product in order - ID: {product['id']}, Quantity: {product['qty']}, Total: {product['total']}")
@@ -306,10 +301,8 @@ def submit_order(user_id, cart_items, total):
             'products': products_data
         }
 
-        # Логируем полные данные запроса
         logger.info(f"Full order data: {json.dumps(data, indent=2)}")
 
-        # Отправляем POST-запрос
         headers = {
             'Content-type': 'application/json',
             'Accept': 'text/plain'
@@ -318,21 +311,26 @@ def submit_order(user_id, cart_items, total):
         logger.info(f"Sending order to URL: {Config.SUBMIT_API_URL}")
 
         try:
-            response = requests.post(Config.SUBMIT_API_URL, data=json.dumps(data), headers=headers)
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    Config.SUBMIT_API_URL,
+                    data=json.dumps(data),
+                    headers=headers
+                ) as response:
+                    # Подробное логирование ответа
+                    logger.info(f"Response status code: {response.status}")
+                    response_text = await response.text()
+                    logger.info(f"Response content: {response_text}")
 
-            # Подробное логирование ответа
-            logger.info(f"Response status code: {response.status_code}")
-            logger.info(f"Response content: {response.text}")
+                    # Проверяем успешность отправки
+                    if response.status == 200:
+                        logger.info(f"Order submitted successfully for user {user_id}")
+                        return True
+                    else:
+                        logger.error(f"Failed to submit order. Status: {response.status}, Response: {response_text}")
+                        return False
 
-            # Проверяем успешность отправки
-            if response.status_code == 200:
-                logger.info(f"Order submitted successfully for user {user_id}")
-                return True
-            else:
-                logger.error(f"Failed to submit order. Status: {response.status_code}, Response: {response.text}")
-                return False
-
-        except requests.RequestException as req_error:
+        except aiohttp.ClientError as req_error:
             logger.error(f"Network error during order submission: {req_error}")
             return False
 

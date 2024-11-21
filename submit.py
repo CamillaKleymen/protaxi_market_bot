@@ -22,4 +22,4 @@ def submit():
         'Accept': 'text/plain'
     }
 
-    return requests.post(url, data=json.dumps(data), headers=headers)
+    requests.post("http://httpbin.org/post", json=data)
