@@ -120,14 +120,33 @@ def start(message):
         logger.error(f"Start error: {e}")
         bot.send_message(message.chat.id, "❌ Произошла ошибка. Попробуйте позже.")
 
-# Модифицируем process_protaxi_id
+# Модифицируем функцию set_user_language для регистрации асинхронного обработчика
+def set_user_language(message):
+    try:
+        user_id = message.from_user.id
+        language = 'ru' if message.text == "🇷🇺 Русский" else 'uz'
+
+        db.set_user_language(user_id, language)
+
+        bot.send_message(
+            message.chat.id,
+            Languages.get_string(language, 'welcome'),
+            reply_markup=types.ReplyKeyboardRemove()
+        )
+        user_states[user_id] = {'state': 'waiting_for_id', 'language': language}
+        bot.register_next_step_handler(message, lambda m: asyncio.run(process_protaxi_id(m)))
+    except Exception as e:
+        logger.error(f"Set user language error: {e}")
+        bot.send_message(message.chat.id, "❌ Произошла ошибка. Попробуйте позже.")
+
+# Теперь process_protaxi_id корректно определен как асинхронная функция
 async def process_protaxi_id(message):
     try:
         user_id = message.from_user.id
         protaxi_id = message.text.strip()
         language = user_states[user_id]['language']
 
-        result = asyncio.run(check_protaxi_id(protaxi_id))
+        result = await check_protaxi_id(protaxi_id)
         if result['success']:
             user_states[user_id].update({
                 'state': 'waiting_for_password',
@@ -144,7 +163,7 @@ async def process_protaxi_id(message):
                 message.chat.id,
                 Languages.get_string(language, 'invalid_id')
             )
-            bot.register_next_step_handler(message, process_protaxi_id)
+            bot.register_next_step_handler(message, lambda m: asyncio.run(process_protaxi_id(m)))
     except Exception as e:
         logger.error(f"Process ProTaxi ID error: {e}")
         bot.send_message(message.chat.id, Languages.get_string('ru', 'restart'))
