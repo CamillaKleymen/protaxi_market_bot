@@ -107,7 +107,7 @@ class Database:
 
     def get_cart(self, user_id):
         """Получает содержимое корзины пользователя."""
-        self.cursor.execute('''SELECT product_name, product_price, quantity 
+        self.cursor.execute('''SELECT product_id, product_name, product_price, quantity 
                                FROM cart WHERE user_id = ?''', (user_id,))
         return self.cursor.fetchall()
 

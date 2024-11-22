@@ -268,78 +268,52 @@ ProTaxi ID: {user_info[1]}
 
 async def submit_order(user_id, cart_items, total):
     try:
-        logger.info(f"Starting order submission for user {user_id}")
-        logger.info(f"Total cart items: {len(cart_items)}")
-        logger.info(f"Total order value: {total} ProCoin")
-
-        if not cart_items:
-            logger.warning(f"Attempt to submit empty order for user {user_id}")
-            return False
-
         user_info = db.get_user(user_id)
         if not user_info:
             logger.error(f"Failed to find user info for user {user_id}")
             return False
 
         protaxi_id = user_info[1]
-        logger.info(f"User ProTaxi ID: {protaxi_id}")
-
-        products_data = [
-            {
-                'id': str(item[0]),
-                'qty': str(item[2]),  # Количество
-                'total': str(item[1] * item[2])  # Цена * количество
-            } for item in cart_items
-        ]
-
-        for product in products_data:
-            logger.info(
-                f"Product in order - ID: {product['id']}, Quantity: {product['qty']}, Total: {product['total']}")
+        products_data = [{
+            'id': str(item[0]),
+            'name': str(item[1]),
+            'price': str(item[2]),
+            'qty': str(item[3]),
+            'total': str(float(item[2]) * item[3])
+        } for item in cart_items]
 
         data = {
             'user': protaxi_id,
             'products': products_data
         }
 
-        logger.info(f"Full order data: {json.dumps(data, indent=2)}")
+        headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
 
-        headers = {
-            'Content-type': 'application/json',
-            'Accept': 'text/plain'
-        }
-
-        logger.info(f"Sending order to URL: {Config.SUBMIT_API_URL}")
-
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
                     Config.SUBMIT_API_URL,
                     data=json.dumps(data),
                     headers=headers
-                ) as response:
-                    # Подробное логирование ответа
-                    logger.info(f"Response status code: {response.status}")
-                    response_text = await response.text()
-                    logger.info(f"Response content: {response_text}")
+            ) as response:
+                response_text = await response.text()
+                logger.info(f"Raw response: {response_text}")
 
-                    # Проверяем успешность отправки
-                    if response.status == 200:
-                        logger.info(f"Order submitted successfully for user {user_id}")
-                        return True
-                    else:
-                        logger.error(f"Failed to submit order. Status: {response.status}, Response: {response_text}")
+                if response.status == 200:
+                    try:
+                        data = await response.json()
+                        return data.get('success', False)
+                    except Exception as json_error:
+                        logger.error(f"JSON decoding error: {json_error}")
                         return False
-
-        except aiohttp.ClientError as req_error:
-            logger.error(f"Network error during order submission: {req_error}")
-            return False
+                else:
+                    logger.error(f"Unexpected status code: {response.status}")
+                    return False
 
     except Exception as e:
-        logger.error(f"Unexpected error during order submission: {e}", exc_info=True)
+        logger.error(f"Unexpected error during order submission: {e}")
         return False
 
 
-# Модифицируем show_main_menu
 def show_main_menu(chat_id, language='ru'):
     try:
         bot.send_message(
@@ -360,7 +334,6 @@ def handle_callback(call):
         message_id = call.message.message_id
         user_id = call.from_user.id
 
-        # Get user language, default to Russian
         user_language = db.get_user_language(user_id) or 'ru'
 
         async def get_user_balance(protaxi_id):
@@ -601,6 +574,7 @@ def handle_callback(call):
                     Languages.get_string(user_language, 'product_not_found')
                 )
 
+
         elif call.data == "cart":
             cart_items = db.get_cart(chat_id)
             if not cart_items:
@@ -611,52 +585,93 @@ def handle_callback(call):
                         message_id,
                         reply_markup=Keyboard.main_menu(user_language)
                     )
+
                 except telebot.apihelper.ApiException:
+
                     bot.send_message(
+
                         chat_id,
+
                         Languages.get_string(user_language, 'cart_empty'),
+
                         reply_markup=Keyboard.main_menu(user_language)
+
                     )
+
                 return
 
             cart_text = Languages.get_string(user_language, 'cart_header') + "\n\n"
+
             total = 0
-            for name, price, quantity in cart_items:
-                item_total = price * quantity
+
+            for product_id, name, price, quantity in cart_items:  # Исправлена распаковка
+
+                item_total = float(price) * int(quantity)
+
                 total += item_total
+
                 cart_text += Languages.get_string(user_language, 'cart_item').format(
+
                     name, quantity, price, item_total
+
                 )
+
             cart_text += Languages.get_string(user_language, 'cart_total').format(total)
 
             markup = types.InlineKeyboardMarkup(row_width=1)
+
             markup.add(
+
                 types.InlineKeyboardButton(
+
                     Languages.get_string(user_language, 'checkout'),
+
                     callback_data="checkout"
+
                 ),
+
                 types.InlineKeyboardButton(
+
                     Languages.get_string(user_language, 'clear_cart'),
+
                     callback_data="clear_cart"
+
                 ),
+
                 types.InlineKeyboardButton(
+
                     Languages.get_string(user_language, 'continue_shopping'),
+
                     callback_data="categories"
+
                 )
+
             )
 
             try:
+
                 bot.edit_message_text(
+
                     cart_text,
+
                     chat_id,
+
                     message_id,
+
                     reply_markup=markup
+
                 )
+
             except telebot.apihelper.ApiException:
+
                 bot.send_message(
+
                     chat_id,
+
                     cart_text,
+
                     reply_markup=markup
+
                 )
 
         elif call.data == "clear_cart":
@@ -675,66 +690,177 @@ def handle_callback(call):
                     reply_markup=Keyboard.main_menu(user_language)
                 )
 
+
+
+
         elif call.data == "checkout":
+
             cart_items = db.get_cart(chat_id)
+
             if not cart_items:
-                bot.answer_callback_query(
-                    call.id,
-                    Languages.get_string(user_language, 'cart_empty')
-                )
+                bot.answer_callback_query(call.id, "Ваша корзина пуста.")
+
                 return
 
-            total = sum(item[1] * item[2] for item in cart_items)
+            total = sum(float(item[2]) * int(item[3]) for item in cart_items)
 
             user_info = db.get_user(user_id)
+
             if not user_info:
-                bot.answer_callback_query(
-                    call.id,
-                    Languages.get_string(user_language, 'user_data_error')
-                )
+                bot.answer_callback_query(call.id, "Ошибка данных пользователя.")
+
                 return
 
             protaxi_id = user_info[1]
+
             user_balance = asyncio.run(get_user_balance(protaxi_id))
 
             if total > user_balance:
-                bot.answer_callback_query(call.id)
                 bot.edit_message_text(
-                    Languages.get_string(user_language, 'insufficient_balance').format(
-                        total, user_balance
-                    ),
+
+                    f"Недостаточно средств. Итог: {total}, Баланс: {user_balance}",
+
                     chat_id,
+
                     message_id,
+
                     reply_markup=types.InlineKeyboardMarkup().add(
-                        types.InlineKeyboardButton(
-                            Languages.get_string(user_language, 'back_to_cart'),
-                            callback_data="cart"
-                        )
+
+                        types.InlineKeyboardButton("Вернуться в корзину", callback_data="cart")
+
                     )
+
                 )
+
                 return
 
-            if submit_order(chat_id, cart_items, total):
-                db.clear_cart(chat_id)
-                try:
+            # Submit order and handle response
+
+            order_result = asyncio.run(submit_order(user_id, cart_items, total))
+
+            try:
+
+                if order_result:  # If server returns True/200
+
+                    db.clear_cart(chat_id)
+
                     bot.edit_message_text(
-                        Languages.get_string(user_language, 'order_success'),
+
+                        "Спасибо, Ваш заказ оформлен!",
+
                         chat_id,
+
                         message_id,
+
                         reply_markup=Keyboard.main_menu(user_language)
+
                     )
-                except telebot.apihelper.ApiException:
-                    bot.send_message(
+
+                else:  # If server returns False
+
+                    bot.edit_message_text(
+
+                        "Ошибка при оформлении заказа. Попробуйте позже.",
+
                         chat_id,
-                        Languages.get_string(user_language, 'order_success'),
+
+                        message_id,
+
                         reply_markup=Keyboard.main_menu(user_language)
+
                     )
+
+            except telebot.apihelper.ApiException:
+
+                # Fallback if message edit fails
+
+                if order_result:
+
+                    bot.send_message(
+
+                        chat_id,
+
+                        "Спасибо, Ваш заказ оформлен!",
+
+                        reply_markup=Keyboard.main_menu(user_language)
+
+                    )
+
+                else:
+
+                    bot.send_message(
+
+                        chat_id,
+
+                        "Ошибка при оформлении заказа. Попробуйте позже.",
+
+                        reply_markup=Keyboard.main_menu(user_language)
+
+                    )
+
+            # Форматируем данные для отправки в API
+
+            order_items = []
+
+            for product_id, name, price, quantity in cart_items:
+                item_total = float(price) * int(quantity)
+
+                order_items.append({
+
+                    'id': str(product_id),
+
+                    'name': str(name),
+
+                    'price': str(price),
+
+                    'qty': str(quantity),
+
+                    'total': str(item_total)
+
+                })
+
+            if asyncio.run(submit_order(chat_id, cart_items, total)):
+
+                db.clear_cart(chat_id)
+
+                try:
+
+                    bot.edit_message_text(
+
+                        Languages.get_string(user_language, 'order_success'),
+
+                        chat_id,
+
+                        message_id,
+
+                        reply_markup=Keyboard.main_menu(user_language)
+
+                    )
+
+                except telebot.apihelper.ApiException:
+
+                    bot.send_message(
+
+                        chat_id,
+
+                        Languages.get_string(user_language, 'order_success'),
+
+                        reply_markup=Keyboard.main_menu(user_language)
+
+                    )
+
             else:
+
                 bot.edit_message_text(
+
                     Languages.get_string(user_language, 'order_error'),
+
                     chat_id,
+
                     message_id,
+
                     reply_markup=Keyboard.main_menu(user_language)
+
                 )
 
     except Exception as e:
@@ -746,6 +872,8 @@ def handle_callback(call):
             )
         except:
             pass
+
+
 
 if __name__ == "__main__":
     bot.polling(none_stop=True)

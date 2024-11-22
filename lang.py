@@ -43,7 +43,7 @@ class Languages:
 
             # Оформление заказа
             'insufficient_balance': "❌ У вас недостаточно баллов для оформления заказа.\nПопробуйте удалить из корзины некоторые товары и попробуйте снова.\n\nСумма заказа: {} ProCoin\nВаш баланс: {} ProCoin",
-            'order_success': "✅ Заказ успешно оформлен!\nМы свяжемся с вами в ближайшее время.",
+            'order_success': "✅ Спасибо! Ваш Заказ успешно оформлен! ",
             'order_error': "❌ Ошибка при оформлении заказа. Пожалуйста, попробуйте позже.",
 
             # Категории
@@ -101,7 +101,7 @@ class Languages:
 
             # Оформление заказа
             'insufficient_balance': "❌ Buyurtma berish uchun ballingiz yetarli emas.\nSavatchadan ba'zi mahsulotlarni olib tashlab, qayta urinib ko'ring.\n\nBuyurtma summasi: {} ProCoin\nSizning balansingiz: {} ProCoin",
-            'order_success': "✅ Buyurtma muvaffaqiyatli rasmiylashtirildi!\nTez orada siz bilan bog'lanamiz.",
+            'order_success': "✅ Buyurtma muvaffaqiyatli rasmiylashtirildi!",
             'order_error': "❌ Buyurtmani rasmiylashtirishda xatolik yuz berdi. Iltimos, keyinroq urinib ko'ring.",
 
             # Категории

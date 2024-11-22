@@ -9,8 +9,8 @@ def submit():
         'products': [
             {
                 'id': {Config.SUBMIT_API_URL},
-                'qty': '3',  # количество
-                'total': '600'  # цена на момент добавления в корзину
+                'qty': '3',
+                'total': '600'
             }
         ]
     }
