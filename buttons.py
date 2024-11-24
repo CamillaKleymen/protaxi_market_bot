@@ -6,13 +6,6 @@ from lang import Languages
 # настройка клавиатуры и работа кнопок
 class Keyboard:
     @staticmethod
-    def get_phone_number():
-        markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
-        button = types.KeyboardButton("📞 Отправить номер телефона", request_contact=True)
-        markup.add(button)
-        return markup
-
-    @staticmethod
     def main_menu(language):
         markup = types.InlineKeyboardMarkup(row_width=2)
         markup.add(
